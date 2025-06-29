@@ -17,6 +17,7 @@ interface AgentViewPreviewDialogProps {
   columnHeaders: ColumnHeader[];
   sampleData: any[][]; // Raw Excel data
   fileName: string;
+  isLoading?: boolean;
 }
 
 export default function AgentViewPreviewDialog({
@@ -28,9 +29,8 @@ export default function AgentViewPreviewDialog({
   columnHeaders,
   sampleData,
   fileName,
+  isLoading = false,
 }: AgentViewPreviewDialogProps) {
-  const [isSaving, setIsSaving] = useState(false);
-
   // Validate vehicle numbers from first 5 rows only (always called before early return)
   const vehicleValidation = useMemo(() => {
     if (!isOpen || sampleData.length <= 1) return null;
@@ -61,15 +61,6 @@ export default function AgentViewPreviewDialog({
   const previewData = sampleData
     .slice(1, 6)
     .map((row) => orderedColumns.map((colIndex) => row[colIndex] || "-"));
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await onSave();
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
@@ -446,11 +437,11 @@ export default function AgentViewPreviewDialog({
             </button>
 
             <button
-              onClick={handleSave}
-              disabled={isSaving}
+              onClick={onSave}
+              disabled={isLoading}
               className="inline-flex items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSaving ? (
+              {isLoading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                   Saving...

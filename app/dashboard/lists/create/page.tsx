@@ -3,8 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase";
-import { collection, addDoc } from "firebase/firestore";
+import { useCreateList } from "@/lib/hooks/useCreateList";
 import ColumnSelector from "@/app/components/ColumnSelector";
 import MultiColumnSelector from "@/app/components/MultiColumnSelector";
 import AgentViewPreviewDialog from "@/app/components/AgentViewPreviewDialog";
@@ -16,6 +15,7 @@ interface ColumnHeader {
 
 export default function CreateListPage() {
   const router = useRouter();
+  const createListMutation = useCreateList();
   const [file, setFile] = useState<File | null>(null);
   const [columnHeaders, setColumnHeaders] = useState<ColumnHeader[]>([]);
   const [rawExcelData, setRawExcelData] = useState<any[][]>([]);
@@ -166,49 +166,31 @@ export default function CreateListPage() {
   };
 
   const handleSaveToFirestore = async () => {
-    try {
-      if (!file || selectedVehicleColumn === null) return;
+    if (!file || selectedVehicleColumn === null) return;
 
-      // Prepare the list data
-      const listData = {
-        name: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
-        fileName: file.name,
-        vehicleColumnIndex: selectedVehicleColumn,
-        agentViewColumns: selectedAgentViewColumns,
-        columnHeaders: columnHeaders,
-        totalRows: rawExcelData.length - 1, // Excluding header row
-        createdAt: new Date(),
-        createdBy: "admin", // TODO: Replace with actual user info
-        status: "active",
-      };
+    const vehicleColumnName =
+      columnHeaders[selectedVehicleColumn]?.name ||
+      `Column_${selectedVehicleColumn}`;
 
-      // Save the list configuration to Firestore
-      const docRef = await addDoc(collection(db, "lists"), listData);
+    const createListData = {
+      fileName: file.name,
+      vehicleColumnIndex: selectedVehicleColumn,
+      vehicleColumnName,
+      agentViewColumns: selectedAgentViewColumns,
+      columnHeaders,
+      sampleData: rawExcelData,
+    };
 
-      // Save the actual data rows
-      const dataRows = rawExcelData.slice(1).map((row, index) => ({
-        listId: docRef.id,
-        rowIndex: index,
-        data: row,
-        createdAt: new Date(),
-      }));
-
-      // Save data in batches (Firestore has limits)
-      const batchSize = 500;
-      for (let i = 0; i < dataRows.length; i += batchSize) {
-        const batch = dataRows.slice(i, i + batchSize);
-        const promises = batch.map((row) =>
-          addDoc(collection(db, "listData"), row)
-        );
-        await Promise.all(promises);
-      }
-
-      setShowPreview(false);
-      router.push("/dashboard/lists");
-    } catch (error) {
-      console.error("Error saving to Firestore:", error);
-      setError("Failed to save list. Please try again.");
-    }
+    createListMutation.mutate(createListData, {
+      onSuccess: () => {
+        setShowPreview(false);
+        router.push("/dashboard/lists");
+      },
+      onError: (error) => {
+        console.error("Error creating list:", error);
+        setError("Failed to save list. Please try again.");
+      },
+    });
   };
 
   return (
@@ -512,6 +494,7 @@ export default function CreateListPage() {
           columnHeaders={columnHeaders}
           sampleData={rawExcelData}
           fileName={file.name}
+          isLoading={createListMutation.isPending}
         />
       )}
     </div>
