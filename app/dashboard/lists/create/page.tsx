@@ -2,8 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { db } from "@/lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
 import ColumnSelector from "@/app/components/ColumnSelector";
 import MultiColumnSelector from "@/app/components/MultiColumnSelector";
+import AgentViewPreviewDialog from "@/app/components/AgentViewPreviewDialog";
 
 interface ColumnHeader {
   index: number;
@@ -11,8 +15,10 @@ interface ColumnHeader {
 }
 
 export default function CreateListPage() {
+  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [columnHeaders, setColumnHeaders] = useState<ColumnHeader[]>([]);
+  const [rawExcelData, setRawExcelData] = useState<any[][]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedVehicleColumn, setSelectedVehicleColumn] = useState<
@@ -21,6 +27,7 @@ export default function CreateListPage() {
   const [selectedAgentViewColumns, setSelectedAgentViewColumns] = useState<
     number[]
   >([]);
+  const [showPreview, setShowPreview] = useState(false);
 
   // Handler for vehicle column selection that also adds it to agent view
   const handleVehicleColumnSelect = (columnIndex: number | null) => {
@@ -50,6 +57,7 @@ export default function CreateListPage() {
     if (!selectedFile) {
       setFile(null);
       setColumnHeaders([]);
+      setRawExcelData([]);
       setSelectedVehicleColumn(null);
       setSelectedAgentViewColumns([]);
       return;
@@ -67,6 +75,7 @@ export default function CreateListPage() {
       !selectedFile.name.toLowerCase().endsWith(".xls")
     ) {
       setError("Please select a valid Excel file (.xlsx or .xls)");
+      setRawExcelData([]);
       setSelectedVehicleColumn(null);
       setSelectedAgentViewColumns([]);
       event.target.value = "";
@@ -115,6 +124,7 @@ export default function CreateListPage() {
             }));
 
             setColumnHeaders(headers);
+            setRawExcelData(jsonData as any[][]); // Store raw data for preview
           } else {
             setError("No data found in the Excel file");
           }
@@ -133,12 +143,72 @@ export default function CreateListPage() {
   const removeFile = () => {
     setFile(null);
     setColumnHeaders([]);
+    setRawExcelData([]);
     setSelectedVehicleColumn(null);
     setSelectedAgentViewColumns([]);
     setError(null);
     // Reset file input
     const fileInput = document.getElementById("excel-file") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
+  };
+
+  const handlePreviewAndSave = () => {
+    if (
+      selectedVehicleColumn === null ||
+      selectedAgentViewColumns.length === 0
+    ) {
+      setError(
+        "Please select a vehicle column and at least one agent view column"
+      );
+      return;
+    }
+    setShowPreview(true);
+  };
+
+  const handleSaveToFirestore = async () => {
+    try {
+      if (!file || selectedVehicleColumn === null) return;
+
+      // Prepare the list data
+      const listData = {
+        name: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension
+        fileName: file.name,
+        vehicleColumnIndex: selectedVehicleColumn,
+        agentViewColumns: selectedAgentViewColumns,
+        columnHeaders: columnHeaders,
+        totalRows: rawExcelData.length - 1, // Excluding header row
+        createdAt: new Date(),
+        createdBy: "admin", // TODO: Replace with actual user info
+        status: "active",
+      };
+
+      // Save the list configuration to Firestore
+      const docRef = await addDoc(collection(db, "lists"), listData);
+
+      // Save the actual data rows
+      const dataRows = rawExcelData.slice(1).map((row, index) => ({
+        listId: docRef.id,
+        rowIndex: index,
+        data: row,
+        createdAt: new Date(),
+      }));
+
+      // Save data in batches (Firestore has limits)
+      const batchSize = 500;
+      for (let i = 0; i < dataRows.length; i += batchSize) {
+        const batch = dataRows.slice(i, i + batchSize);
+        const promises = batch.map((row) =>
+          addDoc(collection(db, "listData"), row)
+        );
+        await Promise.all(promises);
+      }
+
+      setShowPreview(false);
+      router.push("/dashboard/lists");
+    } catch (error) {
+      console.error("Error saving to Firestore:", error);
+      setError("Failed to save list. Please try again.");
+    }
   };
 
   return (
@@ -347,6 +417,101 @@ export default function CreateListPage() {
           title="Select Details Viewable to Agents"
           description="Choose which columns/details agents will be able to view from your Excel file. The vehicle number column will be automatically included when selected above."
           required={true}
+        />
+      )}
+
+      {/* Save Section */}
+      {selectedVehicleColumn !== null &&
+        selectedAgentViewColumns.length > 0 && (
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">
+                Ready to Save
+              </h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Your list configuration is complete. Click preview to review
+                what agents will see, then save to the system.
+              </p>
+            </div>
+
+            <div className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-4">
+                  <div className="flex items-center">
+                    <svg
+                      className="w-5 h-5 text-green-500 mr-2"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-900">
+                      Vehicle column selected
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <svg
+                      className="w-5 h-5 text-green-500 mr-2"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-900">
+                      {selectedAgentViewColumns.length} agent columns selected
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handlePreviewAndSave}
+                  className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <svg
+                    className="w-5 h-5 mr-2"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                    />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                    />
+                  </svg>
+                  Preview & Save
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {/* Preview Dialog */}
+      {file && selectedVehicleColumn !== null && (
+        <AgentViewPreviewDialog
+          isOpen={showPreview}
+          onClose={() => setShowPreview(false)}
+          onSave={handleSaveToFirestore}
+          vehicleColumnIndex={selectedVehicleColumn}
+          agentViewColumns={selectedAgentViewColumns}
+          columnHeaders={columnHeaders}
+          sampleData={rawExcelData}
+          fileName={file.name}
         />
       )}
     </div>
