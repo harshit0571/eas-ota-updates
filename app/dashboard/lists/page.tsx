@@ -76,6 +76,7 @@ export default function ListsPage() {
           <p className="mt-2 text-sm text-gray-700">
             Manage your lists and organize your tasks efficiently.
           </p>
+        
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
           <button

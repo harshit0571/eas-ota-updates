@@ -1,9 +1,10 @@
 "use client";
 
 import { useAuth } from "../context/AuthContext";
+import LogoutButton from "./LogoutButton";
 
 export default function Header() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -15,14 +16,9 @@ export default function Header() {
 
           <div className="flex items-center space-x-4">
             <span className="text-sm text-gray-700">
-              Welcome, {user?.username}
+              Welcome, {user?.email}
             </span>
-            <button
-              onClick={logout}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-xs leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              Logout
-            </button>
+            <LogoutButton variant="header" showConfirmation={true} />
           </div>
         </div>
       </div>

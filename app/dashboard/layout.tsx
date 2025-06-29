@@ -1,5 +1,6 @@
 import Header from "../components/Header";
 import RouteGuard from "../components/RouteGuard";
+import LogoutButton from "../components/LogoutButton";
 import Link from "next/link";
 
 export default function DashboardLayout({
@@ -40,6 +41,11 @@ export default function DashboardLayout({
                     Lists
                   </Link>
                 </div>
+              </div>
+
+              {/* Logout Section */}
+              <div className="px-4 mt-8 pt-4 border-t border-gray-200">
+                <LogoutButton variant="sidebar" showConfirmation={true} />
               </div>
             </nav>
           </div>
