@@ -182,8 +182,12 @@ export default function CreateListPage() {
     };
 
     createListMutation.mutate(createListData, {
-      onSuccess: () => {
+      onSuccess: (data) => {
         setShowPreview(false);
+        // Show success message with creation/update stats
+        const message = `List created successfully! ${data.newVehicles} new vehicles added, ${data.updatedVehicles} existing vehicles updated.`;
+        console.log(message);
+        // You could add a toast notification here if you have a toast system
         router.push("/dashboard/lists");
       },
       onError: (error) => {
