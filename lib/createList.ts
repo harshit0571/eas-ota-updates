@@ -7,6 +7,7 @@ import {
   getDoc,
   updateDoc,
 } from "firebase/firestore";
+import { filterAndCleanVehicleData } from "./validation";
 
 export interface CreateListData {
   fileName: string;
@@ -69,8 +70,30 @@ export async function createList(
   const dateStr = now.toISOString().split("T")[0].replace(/-/g, "");
   const listId = `${fileName.replace(/[^a-zA-Z0-9]/g, "_")}_${dateStr}`;
 
-  // For testing - only process first 5 rows
-  const dataRows = sampleData.slice(1, 6); // Skip header, take first 5
+  // Clean and filter vehicle data
+  const { cleanedData, validCount, invalidCount, invalidRows } =
+    filterAndCleanVehicleData(sampleData, vehicleColumnIndex);
+
+  // For testing - only process first 5 rows of cleaned data
+  const dataRows = cleanedData.slice(1, 6); // Skip header, take first 5
+
+  // Log validation results
+  console.log(`Vehicle number validation results:`);
+  console.log(`- Total rows: ${sampleData.length - 1}`);
+  console.log(`- Valid vehicles: ${validCount}`);
+  console.log(`- Invalid vehicles: ${invalidCount}`);
+
+  if (invalidRows.length > 0) {
+    console.log(
+      `- Invalid vehicle numbers:`,
+      invalidRows.map((row) => ({
+        row: row.rowIndex,
+        original: row.originalValue,
+        cleaned: row.cleanedValue,
+        error: row.error,
+      }))
+    );
+  }
 
   // Create rows array with column names and showtoagent flag
   const rows: ColumnRow[] = columnHeaders.map((header) => ({

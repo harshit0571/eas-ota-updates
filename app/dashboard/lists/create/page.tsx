@@ -7,10 +7,23 @@ import { useCreateList } from "@/lib/hooks/useCreateList";
 import ColumnSelector from "@/app/components/ColumnSelector";
 import MultiColumnSelector from "@/app/components/MultiColumnSelector";
 import AgentViewPreviewDialog from "@/app/components/AgentViewPreviewDialog";
+import { filterAndCleanVehicleData } from "@/lib/validation";
 
 interface ColumnHeader {
   index: number;
   name: string;
+}
+
+interface ValidationResult {
+  cleanedData: any[][];
+  validCount: number;
+  invalidCount: number;
+  invalidRows: Array<{
+    rowIndex: number;
+    originalValue: string;
+    cleanedValue: string;
+    error: string;
+  }>;
 }
 
 export default function CreateListPage() {
@@ -19,6 +32,8 @@ export default function CreateListPage() {
   const [file, setFile] = useState<File | null>(null);
   const [columnHeaders, setColumnHeaders] = useState<ColumnHeader[]>([]);
   const [rawExcelData, setRawExcelData] = useState<any[][]>([]);
+  const [validationResult, setValidationResult] =
+    useState<ValidationResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedVehicleColumn, setSelectedVehicleColumn] = useState<
@@ -41,11 +56,18 @@ export default function CreateListPage() {
         }
         return prev;
       });
+
+      // Run validation when vehicle column is selected
+      if (rawExcelData.length > 0) {
+        const result = filterAndCleanVehicleData(rawExcelData, columnIndex);
+        setValidationResult(result);
+      }
     } else {
       // Remove vehicle column from agent view if vehicle column is cleared
       setSelectedAgentViewColumns((prev) =>
         prev.filter((col) => col !== selectedVehicleColumn)
       );
+      setValidationResult(null);
     }
   };
 
@@ -60,6 +82,7 @@ export default function CreateListPage() {
       setRawExcelData([]);
       setSelectedVehicleColumn(null);
       setSelectedAgentViewColumns([]);
+      setValidationResult(null);
       return;
     }
 
@@ -78,6 +101,7 @@ export default function CreateListPage() {
       setRawExcelData([]);
       setSelectedVehicleColumn(null);
       setSelectedAgentViewColumns([]);
+      setValidationResult(null);
       event.target.value = "";
       return;
     }
@@ -86,6 +110,7 @@ export default function CreateListPage() {
     setError(null);
     setSelectedVehicleColumn(null); // Reset vehicle column selection for new file
     setSelectedAgentViewColumns([]); // Reset agent view columns for new file
+    setValidationResult(null);
     setIsProcessing(true);
 
     try {
@@ -146,6 +171,7 @@ export default function CreateListPage() {
     setRawExcelData([]);
     setSelectedVehicleColumn(null);
     setSelectedAgentViewColumns([]);
+    setValidationResult(null);
     setError(null);
     // Reset file input
     const fileInput = document.getElementById("excel-file") as HTMLInputElement;
@@ -166,7 +192,7 @@ export default function CreateListPage() {
   };
 
   const handleSaveToFirestore = async () => {
-    if (!file || selectedVehicleColumn === null) return;
+    if (!file || selectedVehicleColumn === null || !validationResult) return;
 
     const vehicleColumnName =
       columnHeaders[selectedVehicleColumn]?.name ||
@@ -178,7 +204,7 @@ export default function CreateListPage() {
       vehicleColumnName,
       agentViewColumns: selectedAgentViewColumns,
       columnHeaders,
-      sampleData: rawExcelData,
+      sampleData: validationResult.cleanedData, // Use cleaned data instead of raw data
     };
 
     createListMutation.mutate(createListData, {
@@ -394,6 +420,175 @@ export default function CreateListPage() {
         />
       )}
 
+      {/* Vehicle Number Validation Results */}
+      {validationResult && (
+        <div className="bg-white shadow rounded-lg">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">
+              Vehicle Number Validation
+            </h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Vehicle numbers are cleaned and validated according to Indian RTO
+              standards.
+            </p>
+          </div>
+
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-8 w-8 text-blue-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-blue-800">
+                      Valid Vehicles
+                    </p>
+                    <p className="text-2xl font-bold text-blue-900">
+                      {validationResult.validCount}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-red-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-8 w-8 text-red-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-red-800">
+                      Invalid Vehicles
+                    </p>
+                    <p className="text-2xl font-bold text-red-900">
+                      {validationResult.invalidCount}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-green-50 p-4 rounded-lg">
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <svg
+                      className="h-8 w-8 text-green-400"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                      />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm font-medium text-green-800">
+                      Success Rate
+                    </p>
+                    <p className="text-2xl font-bold text-green-900">
+                      {validationResult.validCount +
+                        validationResult.invalidCount >
+                      0
+                        ? Math.round(
+                            (validationResult.validCount /
+                              (validationResult.validCount +
+                                validationResult.invalidCount)) *
+                              100
+                          )
+                        : 0}
+                      %
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Invalid Vehicle Numbers Details */}
+            {validationResult.invalidRows.length > 0 && (
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">
+                  Invalid Vehicle Numbers (will be excluded):
+                </h3>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {validationResult.invalidRows
+                      .slice(0, 10)
+                      .map((row, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-red-600 font-medium">
+                              Row {row.rowIndex}:
+                            </span>
+                            <span className="text-gray-700">
+                              {row.originalValue}
+                            </span>
+                            <span className="text-gray-500">→</span>
+                            <span className="text-gray-700">
+                              {row.cleanedValue || "N/A"}
+                            </span>
+                          </div>
+                          <span className="text-red-600 text-xs">
+                            {row.error}
+                          </span>
+                        </div>
+                      ))}
+                    {validationResult.invalidRows.length > 10 && (
+                      <div className="text-xs text-gray-500 pt-2">
+                        ... and {validationResult.invalidRows.length - 10} more
+                        invalid entries
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Validation Info */}
+            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-xs font-medium text-yellow-800 mb-2">
+                Vehicle Number Cleaning Rules:
+              </p>
+              <ul className="text-xs text-yellow-700 space-y-1">
+                <li>• All special characters and spaces are removed</li>
+                <li>• Converted to uppercase</li>
+                <li>• Must follow Indian RTO format standards</li>
+                <li>• Invalid vehicle numbers are excluded from processing</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Agent Viewable Columns Selection */}
       {columnHeaders.length > 0 && (
         <MultiColumnSelector
@@ -408,15 +603,20 @@ export default function CreateListPage() {
 
       {/* Save Section */}
       {selectedVehicleColumn !== null &&
-        selectedAgentViewColumns.length > 0 && (
+        selectedAgentViewColumns.length > 0 &&
+        validationResult &&
+        validationResult.validCount > 0 && (
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">
                 Ready to Save
               </h2>
               <p className="mt-1 text-sm text-gray-600">
-                Your list configuration is complete. Click preview to review
-                what agents will see, then save to the system.
+                Your list configuration is complete.{" "}
+                {validationResult.validCount} valid vehicle numbers will be
+                processed.
+                {validationResult.invalidCount > 0 &&
+                  ` ${validationResult.invalidCount} invalid vehicle numbers will be excluded.`}
               </p>
             </div>
 
@@ -455,6 +655,22 @@ export default function CreateListPage() {
                       {selectedAgentViewColumns.length} agent columns selected
                     </span>
                   </div>
+                  <div className="flex items-center">
+                    <svg
+                      className="w-5 h-5 text-green-500 mr-2"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    <span className="text-sm font-medium text-gray-900">
+                      {validationResult.validCount} valid vehicles ready
+                    </span>
+                  </div>
                 </div>
 
                 <button
@@ -488,7 +704,7 @@ export default function CreateListPage() {
         )}
 
       {/* Preview Dialog */}
-      {file && selectedVehicleColumn !== null && (
+      {file && selectedVehicleColumn !== null && validationResult && (
         <AgentViewPreviewDialog
           isOpen={showPreview}
           onClose={() => setShowPreview(false)}
@@ -496,7 +712,7 @@ export default function CreateListPage() {
           vehicleColumnIndex={selectedVehicleColumn}
           agentViewColumns={selectedAgentViewColumns}
           columnHeaders={columnHeaders}
-          sampleData={rawExcelData}
+          sampleData={validationResult.cleanedData}
           fileName={file.name}
           isLoading={createListMutation.isPending}
         />
