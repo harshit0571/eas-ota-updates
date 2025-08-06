@@ -1,147 +1,306 @@
 "use client";
 
 import { useState } from "react";
-
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  role: string;
-  status: "active" | "inactive";
-}
-
-const mockUsers: User[] = [
-  {
-    id: 1,
-    name: "John Doe",
-    email: "john@example.com",
-    role: "Admin",
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "Jane Smith",
-    email: "jane@example.com",
-    role: "User",
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "Bob Johnson",
-    email: "bob@example.com",
-    role: "User",
-    status: "inactive",
-  },
-  {
-    id: 4,
-    name: "Alice Brown",
-    email: "alice@example.com",
-    role: "Manager",
-    status: "active",
-  },
-];
+import {
+  useUsers,
+  useUpdateUserVerification,
+  User,
+} from "../../../lib/hooks/useUsers";
 
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const { data: users = [], isLoading, error } = useUsers();
+  const updateVerification = useUpdateUserVerification();
   const [searchTerm, setSearchTerm] = useState("");
+  const [loadingUsers, setLoadingUsers] = useState<Set<string>>(new Set());
 
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.city.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const toggleUserStatus = (id: number) => {
-    setUsers(
-      users.map((user) =>
-        user.id === id
-          ? {
-              ...user,
-              status: user.status === "active" ? "inactive" : "active",
-            }
-          : user
-      )
+  const handleVerificationToggle = async (
+    userId: string,
+    currentStatus: string
+  ) => {
+    try {
+      setLoadingUsers((prev) => new Set(prev).add(userId));
+      const newStatus = currentStatus === "pending" ? "verified" : "pending";
+      await updateVerification.mutateAsync({ userId, status: newStatus });
+    } catch (error) {
+      console.error("Error updating verification status:", error);
+    } finally {
+      setLoadingUsers((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(userId);
+        return newSet;
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "verified":
+        return "bg-green-100 text-green-800 border-green-200";
+      case "rejected":
+        return "bg-red-100 text-red-800 border-red-200";
+      default:
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "verified":
+        return "Verified";
+      case "rejected":
+        return "Rejected";
+      default:
+        return "Pending";
+    }
+  };
+
+  const ToggleSwitch = ({
+    userId,
+    currentStatus,
+    isLoading,
+  }: {
+    userId: string;
+    currentStatus: string;
+    isLoading: boolean;
+  }) => {
+    const isVerified = currentStatus === "verified";
+
+    return (
+      <div className="flex items-center space-x-3">
+        <span
+          className={`text-sm font-medium transition-colors ${
+            isVerified ? "text-gray-400" : "text-gray-900"
+          }`}
+        >
+          Pending
+        </span>
+        <button
+          onClick={() => handleVerificationToggle(userId, currentStatus)}
+          disabled={isLoading}
+          className={`relative inline-flex h-7 w-12 items-center rounded-full transition-all duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 shadow-md ${
+            isVerified
+              ? "bg-gradient-to-r from-green-400 to-green-500 hover:from-green-500 hover:to-green-600"
+              : "bg-gray-300 hover:bg-gray-400"
+          }`}
+        >
+          <span
+            className={`h-5 w-5 transform rounded-full bg-white transition-all duration-300 ease-in-out shadow-lg flex items-center justify-center ${
+              isVerified ? "translate-x-6" : "translate-x-1"
+            }`}
+          >
+            {isLoading ? (
+              <svg
+                className="h-3 w-3 animate-spin text-gray-400"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            ) : isVerified ? (
+              <svg
+                className="h-3 w-3 text-green-600"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            ) : (
+              <svg
+                className="h-3 w-3 text-gray-400"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            )}
+          </span>
+        </button>
+        <span
+          className={`text-sm font-medium transition-colors ${
+            isVerified ? "text-gray-900" : "text-gray-400"
+          }`}
+        >
+          Verified
+        </span>
+      </div>
     );
   };
 
-  return (
-    <div className="space-y-6">
-      <div className="sm:flex sm:items-center">
-        <div className="sm:flex-auto">
-          <h1 className="text-xl font-semibold text-gray-900">Users</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            Manage your application users and their permissions.
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <span className="ml-2 text-gray-600 mt-4">Loading users...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+        <div className="flex items-center">
+          <svg
+            className="h-5 w-5 text-red-400 mr-2"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <p className="text-red-800 font-medium">
+            Error loading users: {error.message}
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-          <button
-            type="button"
-            className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
-          >
-            Add User
-          </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="sm:flex sm:items-center">
+        <div className="sm:flex-auto">
+          <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
+          <p className="mt-2 text-lg text-gray-700">
+            Manage user verification status and view user information.
+          </p>
         </div>
       </div>
 
       {/* Search */}
-      <div className="max-w-md">
-        <input
-          type="text"
-          placeholder="Search users..."
-          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+      <div className="max-w-lg">
+        <div className="relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg
+              className="h-5 w-5 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search users by name, email, phone, or city..."
+            className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* Users Count & Stats */}
+      <div className="flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 border border-blue-200">
+        <div className="text-sm text-gray-700">
+          Showing{" "}
+          <span className="font-bold text-gray-900">
+            {filteredUsers.length}
+          </span>{" "}
+          of <span className="font-bold text-gray-900">{users.length}</span>{" "}
+          users
+        </div>
+        <div className="flex items-center space-x-6 text-sm">
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-green-500 rounded-full mr-2 shadow-sm"></div>
+            <span className="text-gray-700">
+              <span className="font-bold text-green-600">
+                {
+                  users.filter((u) => u.verification_status === "verified")
+                    .length
+                }
+              </span>{" "}
+              Verified
+            </span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2 shadow-sm"></div>
+            <span className="text-gray-700">
+              <span className="font-bold text-yellow-600">
+                {
+                  users.filter((u) => u.verification_status === "pending")
+                    .length
+                }
+              </span>{" "}
+              Pending
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Users Table */}
-      <div className="bg-white shadow overflow-hidden sm:rounded-md">
-        <ul className="divide-y divide-gray-200">
-          {filteredUsers.map((user) => (
-            <li key={user.id}>
-              <div className="px-4 py-4 sm:px-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0 h-10 w-10">
-                      <div className="h-10 w-10 rounded-full bg-indigo-500 flex items-center justify-center">
-                        <span className="text-sm font-medium leading-none text-white">
-                          {user.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="ml-4">
-                      <div className="flex items-center">
-                        <div className="text-sm font-medium text-gray-900">
-                          {user.name}
-                        </div>
-                        <span
-                          className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            user.status === "active"
-                              ? "bg-green-100 text-green-800"
-                              : "bg-red-100 text-red-800"
-                          }`}
-                        >
-                          {user.status}
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {user.email} • {user.role}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => toggleUserStatus(user.id)}
-                      className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
-                    >
-                      {user.status === "active" ? "Deactivate" : "Activate"}
-                    </button>
-                    <button className="text-gray-400 hover:text-gray-600">
+      <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+              <tr>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  User
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Contact Info
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Role
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Verification
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filteredUsers.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-6 py-16 text-center text-gray-500"
+                  >
+                    <div className="flex flex-col items-center">
                       <svg
-                        className="h-5 w-5"
+                        className="w-16 h-16 text-gray-300 mb-4"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -149,18 +308,160 @@ export default function UsersPage() {
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"
+                          strokeWidth={1.5}
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
                         />
                       </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
+                      <p className="text-xl font-medium text-gray-900 mb-2">
+                        No users found
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Try adjusting your search terms or check back later.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filteredUsers.map((user, index) => (
+                  <tr
+                    key={user.id}
+                    className={`hover:bg-blue-50 transition-all duration-200 ${
+                      index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                    }`}
+                  >
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0 h-12 w-12">
+                          <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                            <span className="text-sm font-bold text-white">
+                              {user.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-semibold text-gray-900">
+                            {user.name}
+                          </div>
+                          <div className="text-sm text-gray-600">
+                            {user.email}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900">
+                        {user.phone}
+                      </div>
+                      <div className="text-sm text-gray-600">{user.city}</div>
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 capitalize border border-blue-200">
+                        {user.role}
+                      </span>
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <div className="flex items-center">
+                        <div
+                          className={`w-2 h-2 rounded-full mr-3 ${
+                            user.verification_status === "verified"
+                              ? "bg-green-500"
+                              : user.verification_status === "rejected"
+                              ? "bg-red-500"
+                              : "bg-yellow-500"
+                          }`}
+                        ></div>
+                        <span
+                          className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor(
+                            user.verification_status
+                          )}`}
+                        >
+                          {getStatusText(user.verification_status)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <ToggleSwitch
+                        userId={user.id}
+                        currentStatus={user.verification_status}
+                        isLoading={loadingUsers.has(user.id)}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
+
+      {/* Summary Stats Cards */}
+      {/* <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-xl shadow-lg text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium opacity-90">Total Users</div>
+              <div className="mt-1 text-3xl font-bold">{users.length}</div>
+            </div>
+            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div className="bg-gradient-to-r from-green-500 to-green-600 p-6 rounded-xl shadow-lg text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium opacity-90">
+                Verified Users
+              </div>
+              <div className="mt-1 text-3xl font-bold">
+                {
+                  users.filter((u) => u.verification_status === "verified")
+                    .length
+                }
+              </div>
+            </div>
+            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+        <div className="bg-gradient-to-r from-yellow-500 to-yellow-600 p-6 rounded-xl shadow-lg text-white">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium opacity-90">
+                Pending Verification
+              </div>
+              <div className="mt-1 text-3xl font-bold">
+                {
+                  users.filter((u) => u.verification_status === "pending")
+                    .length
+                }
+              </div>
+            </div>
+            <div className="p-3 bg-white bg-opacity-20 rounded-lg">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div> */}
     </div>
   );
 }
