@@ -4,14 +4,27 @@ import { useState } from "react";
 import {
   useUsers,
   useUpdateUserVerification,
+  useUpdateUserPassword,
   User,
 } from "../../../lib/hooks/useUsers";
 
 export default function UsersPage() {
   const { data: users = [], isLoading, error } = useUsers();
   const updateVerification = useUpdateUserVerification();
+  const updatePassword = useUpdateUserPassword();
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingUsers, setLoadingUsers] = useState<Set<string>>(new Set());
+  const [passwordModal, setPasswordModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+    newPassword: string;
+  }>({
+    isOpen: false,
+    userId: "",
+    userName: "",
+    newPassword: "",
+  });
 
   const filteredUsers = users.filter(
     (user) =>
@@ -38,6 +51,42 @@ export default function UsersPage() {
         return newSet;
       });
     }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!passwordModal.newPassword || passwordModal.newPassword.length < 6) {
+      alert("Password must be at least 6 characters long");
+      return;
+    }
+
+    try {
+      await updatePassword.mutateAsync({
+        userId: passwordModal.userId,
+        password: passwordModal.newPassword,
+      });
+
+      // Close modal and reset
+      setPasswordModal({
+        isOpen: false,
+        userId: "",
+        userName: "",
+        newPassword: "",
+      });
+
+      alert("Password updated successfully!");
+    } catch (error: any) {
+      console.error("Error updating password:", error);
+      alert(error.message || "Failed to update password");
+    }
+  };
+
+  const openPasswordModal = (userId: string, userName: string) => {
+    setPasswordModal({
+      isOpen: true,
+      userId,
+      userName,
+      newPassword: "",
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -289,13 +338,16 @@ export default function UsersPage() {
                 <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Verification
                 </th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredUsers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={5}
+                    colSpan={6}
                     className="px-6 py-16 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center">
@@ -390,6 +442,27 @@ export default function UsersPage() {
                         isLoading={loadingUsers.has(user.id)}
                       />
                     </td>
+                    <td className="px-6 py-6 whitespace-nowrap">
+                      <button
+                        onClick={() => openPasswordModal(user.id, user.name)}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                      >
+                        <svg
+                          className="w-4 h-4 mr-2"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                          />
+                        </svg>
+                        Change Password
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -462,6 +535,121 @@ export default function UsersPage() {
           </div>
         </div>
       </div> */}
+
+      {/* Password Change Modal */}
+      {passwordModal.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Change Password
+                </h3>
+                <button
+                  onClick={() =>
+                    setPasswordModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      newPassword: "",
+                    })
+                  }
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Changing password for:{" "}
+                  <span className="font-semibold">
+                    {passwordModal.userName}
+                  </span>
+                </p>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Password
+                </label>
+                <input
+                  type="password"
+                  value={passwordModal.newPassword}
+                  onChange={(e) =>
+                    setPasswordModal({
+                      ...passwordModal,
+                      newPassword: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter new password (min 6 characters)"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Password must be at least 6 characters long
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() =>
+                    setPasswordModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      newPassword: "",
+                    })
+                  }
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasswordChange}
+                  disabled={updatePassword.isPending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updatePassword.isPending ? (
+                    <div className="flex items-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Updating...
+                    </div>
+                  ) : (
+                    "Update Password"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

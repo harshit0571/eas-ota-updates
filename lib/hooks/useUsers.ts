@@ -81,3 +81,30 @@ export function useUpdateUserVerification() {
     },
   });
 }
+
+export function useUpdateUserPassword() {
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      password,
+    }: {
+      userId: string;
+      password: string;
+    }) => {
+      const response = await fetch(`/api/users/${userId}/password`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update password");
+      }
+
+      return response.json();
+    },
+  });
+}
