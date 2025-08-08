@@ -365,7 +365,7 @@ export default function ListsPage() {
                   </Link>
                   <div className="flex items-center space-x-2">
                     <span className="text-xs text-gray-500">ID: {list.id}</span>
-                    <button
+                    {/* <button
                       onClick={() =>
                         handleDeleteList(
                           list.id,
@@ -414,7 +414,7 @@ export default function ListsPage() {
                           />
                         </svg>
                       )}
-                    </button>
+                    </button> */}
                   </div>
                 </div>
               </div>
