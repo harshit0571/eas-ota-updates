@@ -135,3 +135,28 @@ export function useUpdateUserDeviceId() {
     },
   });
 }
+
+export function useUpdateUserRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      role,
+    }: {
+      userId: string;
+      role: "admin" | "agent";
+    }) => {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        role: role,
+        updatedAt: new Date(),
+      });
+      return { userId, role };
+    },
+    onSuccess: () => {
+      // Invalidate and refetch users
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}

@@ -6,6 +6,7 @@ import {
   useUpdateUserVerification,
   useUpdateUserPassword,
   useUpdateUserDeviceId,
+  useUpdateUserRole,
   User,
 } from "../../../lib/hooks/useUsers";
 
@@ -14,6 +15,7 @@ export default function UsersPage() {
   const updateVerification = useUpdateUserVerification();
   const updatePassword = useUpdateUserPassword();
   const updateDeviceId = useUpdateUserDeviceId();
+  const updateRole = useUpdateUserRole();
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingUsers, setLoadingUsers] = useState<Set<string>>(new Set());
   const [passwordModal, setPasswordModal] = useState<{
@@ -39,6 +41,19 @@ export default function UsersPage() {
     userName: "",
     currentDeviceId: "",
     newDeviceId: "",
+  });
+  const [roleModal, setRoleModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+    currentRole: string;
+    newRole: "admin" | "agent";
+  }>({
+    isOpen: false,
+    userId: "",
+    userName: "",
+    currentRole: "",
+    newRole: "agent",
   });
 
   const filteredUsers = users.filter(
@@ -144,6 +159,43 @@ export default function UsersPage() {
       userName,
       currentDeviceId,
       newDeviceId: currentDeviceId,
+    });
+  };
+
+  const handleRoleChange = async () => {
+    try {
+      await updateRole.mutateAsync({
+        userId: roleModal.userId,
+        role: roleModal.newRole,
+      });
+
+      // Close modal and reset
+      setRoleModal({
+        isOpen: false,
+        userId: "",
+        userName: "",
+        currentRole: "",
+        newRole: "agent",
+      });
+
+      alert("Role updated successfully!");
+    } catch (error: any) {
+      console.error("Error updating role:", error);
+      alert(error.message || "Failed to update role");
+    }
+  };
+
+  const openRoleModal = (
+    userId: string,
+    userName: string,
+    currentRole: string
+  ) => {
+    setRoleModal({
+      isOpen: true,
+      userId,
+      userName,
+      currentRole,
+      newRole: currentRole === "admin" ? "agent" : "admin",
     });
   };
 
@@ -417,7 +469,7 @@ export default function UsersPage() {
                 <th className="w-40 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Verification
                 </th>
-                <th className="w-44 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-52 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -555,25 +607,48 @@ export default function UsersPage() {
                       />
                     </td>
                     <td className="px-4 py-4">
-                      <button
-                        onClick={() => openPasswordModal(user.id, user.name)}
-                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
-                      >
-                        <svg
-                          className="w-3 h-3 mr-1"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      <div className="flex space-x-2">
+                        <button
+                          onClick={() => openPasswordModal(user.id, user.name)}
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
-                          />
-                        </svg>
-                        Password
-                      </button>
+                          <svg
+                            className="w-3 h-3 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1721 9z"
+                            />
+                          </svg>
+                          Password
+                        </button>
+                        <button
+                          onClick={() =>
+                            openRoleModal(user.id, user.name, user.role)
+                          }
+                          className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 transition-colors duration-200"
+                        >
+                          <svg
+                            className="w-3 h-3 mr-1"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                            />
+                          </svg>
+                          Role
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -882,6 +957,132 @@ export default function UsersPage() {
                     </div>
                   ) : (
                     "Update Password"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Change Modal */}
+      {roleModal.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Change User Role
+                </h3>
+                <button
+                  onClick={() =>
+                    setRoleModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      currentRole: "",
+                      newRole: "agent",
+                    })
+                  }
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Changing role for:{" "}
+                  <span className="font-semibold">{roleModal.userName}</span>
+                </p>
+
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Role
+                  </label>
+                  <div className="text-sm font-medium text-gray-900 bg-gray-100 px-3 py-2 rounded border capitalize">
+                    {roleModal.currentRole}
+                  </div>
+                </div>
+
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Role
+                </label>
+                <select
+                  value={roleModal.newRole}
+                  onChange={(e) =>
+                    setRoleModal({
+                      ...roleModal,
+                      newRole: e.target.value as "admin" | "agent",
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-purple-500 focus:border-purple-500 text-sm capitalize"
+                >
+                  <option value="admin">Admin</option>
+                  <option value="agent">Agent</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Admin users have full access, while agents have limited access
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() =>
+                    setRoleModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      currentRole: "",
+                      newRole: "agent",
+                    })
+                  }
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRoleChange}
+                  disabled={updateRole.isPending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updateRole.isPending ? (
+                    <div className="flex items-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Updating...
+                    </div>
+                  ) : (
+                    "Update Role"
                   )}
                 </button>
               </div>
