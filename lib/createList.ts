@@ -84,7 +84,7 @@ export async function createList(
     filterAndCleanVehicleData(sampleData, vehicleColumnIndex);
 
   // Process all rows of cleaned data (skip header)
-  const dataRows = cleanedData.slice(1, 6); // Skip header, process all rows
+  const dataRows = cleanedData.slice(1); // Skip header, process all rows
 
   // Log validation results
   console.log(`Vehicle number validation results:`);
