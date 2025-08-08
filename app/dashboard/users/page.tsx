@@ -5,6 +5,7 @@ import {
   useUsers,
   useUpdateUserVerification,
   useUpdateUserPassword,
+  useUpdateUserDeviceId,
   User,
 } from "../../../lib/hooks/useUsers";
 
@@ -12,6 +13,7 @@ export default function UsersPage() {
   const { data: users = [], isLoading, error } = useUsers();
   const updateVerification = useUpdateUserVerification();
   const updatePassword = useUpdateUserPassword();
+  const updateDeviceId = useUpdateUserDeviceId();
   const [searchTerm, setSearchTerm] = useState("");
   const [loadingUsers, setLoadingUsers] = useState<Set<string>>(new Set());
   const [passwordModal, setPasswordModal] = useState<{
@@ -25,13 +27,27 @@ export default function UsersPage() {
     userName: "",
     newPassword: "",
   });
+  const [deviceIdModal, setDeviceIdModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    userName: string;
+    currentDeviceId: string;
+    newDeviceId: string;
+  }>({
+    isOpen: false,
+    userId: "",
+    userName: "",
+    currentDeviceId: "",
+    newDeviceId: "",
+  });
 
   const filteredUsers = users.filter(
     (user) =>
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.city.toLowerCase().includes(searchTerm.toLowerCase())
+      user.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.deviceId.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleVerificationToggle = async (
@@ -86,6 +102,48 @@ export default function UsersPage() {
       userId,
       userName,
       newPassword: "",
+    });
+  };
+
+  const handleDeviceIdChange = async () => {
+    if (!deviceIdModal.newDeviceId.trim()) {
+      alert("Device ID cannot be empty");
+      return;
+    }
+
+    try {
+      await updateDeviceId.mutateAsync({
+        userId: deviceIdModal.userId,
+        deviceId: deviceIdModal.newDeviceId.trim(),
+      });
+
+      // Close modal and reset
+      setDeviceIdModal({
+        isOpen: false,
+        userId: "",
+        userName: "",
+        currentDeviceId: "",
+        newDeviceId: "",
+      });
+
+      alert("Device ID updated successfully!");
+    } catch (error: any) {
+      console.error("Error updating device ID:", error);
+      alert(error.message || "Failed to update device ID");
+    }
+  };
+
+  const openDeviceIdModal = (
+    userId: string,
+    userName: string,
+    currentDeviceId: string
+  ) => {
+    setDeviceIdModal({
+      isOpen: true,
+      userId,
+      userName,
+      currentDeviceId,
+      newDeviceId: currentDeviceId,
     });
   };
 
@@ -271,7 +329,7 @@ export default function UsersPage() {
           </div>
           <input
             type="text"
-            placeholder="Search users by name, email, phone, or city..."
+            placeholder="Search users by name, email, phone, city, or device ID..."
             className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -319,26 +377,47 @@ export default function UsersPage() {
 
       {/* Users Table */}
       <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-200">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+        <div className="mb-2 text-xs text-gray-500 text-right">
+          <span className="inline-flex items-center">
+            <svg
+              className="w-3 h-3 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 16l-4-4m0 0l4-4m-4 4h18"
+              />
+            </svg>
+            Scroll horizontally to see all columns
+          </span>
+        </div>
+        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
+          <table className="w-full min-w-[1200px] divide-y divide-gray-200">
             <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
               <tr>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-64 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   User
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-48 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Contact Info
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-24 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Role
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-48 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                  Device ID
+                </th>
+                <th className="w-32 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-40 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Verification
                 </th>
-                <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <th className="w-44 px-4 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -347,7 +426,7 @@ export default function UsersPage() {
               {filteredUsers.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="px-6 py-16 text-center text-gray-500"
                   >
                     <div className="flex flex-col items-center">
@@ -381,11 +460,11 @@ export default function UsersPage() {
                       index % 2 === 0 ? "bg-white" : "bg-gray-50"
                     }`}
                   >
-                    <td className="px-6 py-6 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <div className="flex items-center">
-                        <div className="flex-shrink-0 h-12 w-12">
-                          <div className="h-12 w-12 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-                            <span className="text-sm font-bold text-white">
+                        <div className="flex-shrink-0 h-10 w-10">
+                          <div className="h-10 w-10 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
+                            <span className="text-xs font-bold text-white">
                               {user.name
                                 .split(" ")
                                 .map((n) => n[0])
@@ -394,31 +473,64 @@ export default function UsersPage() {
                             </span>
                           </div>
                         </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-semibold text-gray-900">
+                        <div className="ml-3 min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-gray-900 truncate">
                             {user.name}
                           </div>
-                          <div className="text-sm text-gray-600">
+                          <div className="text-xs text-gray-600 truncate">
                             {user.email}
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                    <td className="px-4 py-4">
+                      <div className="text-sm font-medium text-gray-900 truncate">
                         {user.phone}
                       </div>
-                      <div className="text-sm text-gray-600">{user.city}</div>
+                      <div className="text-xs text-gray-600 truncate">
+                        {user.city}
+                      </div>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap">
-                      <span className="inline-flex px-3 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 capitalize border border-blue-200">
+                    <td className="px-4 py-4">
+                      <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-800 capitalize border border-blue-200">
                         {user.role}
                       </span>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center space-x-2">
+                        <div
+                          className="text-xs font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded border max-w-28 truncate"
+                          title={user.deviceId || "Not set"}
+                        >
+                          {user.deviceId || "Not set"}
+                        </div>
+                        <button
+                          onClick={() =>
+                            openDeviceIdModal(user.id, user.name, user.deviceId)
+                          }
+                          className="text-blue-600 hover:text-blue-800 p-1 hover:bg-blue-50 rounded"
+                          title="Change Device ID"
+                        >
+                          <svg
+                            className="w-3 h-3"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
                       <div className="flex items-center">
                         <div
-                          className={`w-2 h-2 rounded-full mr-3 ${
+                          className={`w-2 h-2 rounded-full mr-2 ${
                             user.verification_status === "verified"
                               ? "bg-green-500"
                               : user.verification_status === "rejected"
@@ -427,7 +539,7 @@ export default function UsersPage() {
                           }`}
                         ></div>
                         <span
-                          className={`inline-flex px-3 py-1 text-xs font-semibold rounded-full border ${getStatusColor(
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full border ${getStatusColor(
                             user.verification_status
                           )}`}
                         >
@@ -435,20 +547,20 @@ export default function UsersPage() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <ToggleSwitch
                         userId={user.id}
                         currentStatus={user.verification_status}
                         isLoading={loadingUsers.has(user.id)}
                       />
                     </td>
-                    <td className="px-6 py-6 whitespace-nowrap">
+                    <td className="px-4 py-4">
                       <button
                         onClick={() => openPasswordModal(user.id, user.name)}
-                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
+                        className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200"
                       >
                         <svg
-                          className="w-4 h-4 mr-2"
+                          className="w-3 h-3 mr-1"
                           fill="none"
                           stroke="currentColor"
                           viewBox="0 0 24 24"
@@ -460,7 +572,7 @@ export default function UsersPage() {
                             d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
                           />
                         </svg>
-                        Change Password
+                        Password
                       </button>
                     </td>
                   </tr>
@@ -535,6 +647,133 @@ export default function UsersPage() {
           </div>
         </div>
       </div> */}
+
+      {/* Device ID Change Modal */}
+      {deviceIdModal.isOpen && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Change Device ID
+                </h3>
+                <button
+                  onClick={() =>
+                    setDeviceIdModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      currentDeviceId: "",
+                      newDeviceId: "",
+                    })
+                  }
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    className="w-6 h-6"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  Changing device ID for:{" "}
+                  <span className="font-semibold">
+                    {deviceIdModal.userName}
+                  </span>
+                </p>
+
+                <div className="mb-3">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Current Device ID
+                  </label>
+                  <div className="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-2 rounded border">
+                    {deviceIdModal.currentDeviceId || "Not set"}
+                  </div>
+                </div>
+
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  New Device ID
+                </label>
+                <input
+                  type="text"
+                  value={deviceIdModal.newDeviceId}
+                  onChange={(e) =>
+                    setDeviceIdModal({
+                      ...deviceIdModal,
+                      newDeviceId: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                  placeholder="Enter new device ID"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Device ID is used to restrict user access to a specific device
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() =>
+                    setDeviceIdModal({
+                      isOpen: false,
+                      userId: "",
+                      userName: "",
+                      currentDeviceId: "",
+                      newDeviceId: "",
+                    })
+                  }
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeviceIdChange}
+                  disabled={updateDeviceId.isPending}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {updateDeviceId.isPending ? (
+                    <div className="flex items-center">
+                      <svg
+                        className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      Updating...
+                    </div>
+                  ) : (
+                    "Update Device ID"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Password Change Modal */}
       {passwordModal.isOpen && (

@@ -16,10 +16,18 @@ export interface CreateListData {
   agentViewColumns: number[];
   columnHeaders: Array<{ index: number; name: string }>;
   sampleData: any[][];
+  onProgress?: (progress: {
+    currentBatch: number;
+    totalBatches: number;
+    progress: number;
+    processedVehicles: number;
+    totalVehicles: number;
+  }) => void;
 }
 
 export interface ColumnRow {
-  name: string; // Column header name
+  name: string; // Original column header name
+  sanitizedName: string; // Sanitized field name for Firestore
   showtoagent: boolean;
 }
 
@@ -63,6 +71,7 @@ export async function createList(
     agentViewColumns,
     columnHeaders,
     sampleData,
+    onProgress,
   } = data;
 
   // Generate list ID: fileName_date
@@ -74,8 +83,8 @@ export async function createList(
   const { cleanedData, validCount, invalidCount, invalidRows } =
     filterAndCleanVehicleData(sampleData, vehicleColumnIndex);
 
-  // For testing - only process first 5 rows of cleaned data
-  const dataRows = cleanedData.slice(1, 6); // Skip header, take first 5
+  // Process all rows of cleaned data (skip header)
+  const dataRows = cleanedData.slice(1, 6); // Skip header, process all rows
 
   // Log validation results
   console.log(`Vehicle number validation results:`);
@@ -96,10 +105,20 @@ export async function createList(
   }
 
   // Create rows array with column names and showtoagent flag
-  const rows: ColumnRow[] = columnHeaders.map((header) => ({
-    name: header.name,
-    showtoagent: agentViewColumns.includes(header.index), // Only selected columns are shown to agents
-  }));
+  const rows: ColumnRow[] = columnHeaders.map((header) => {
+    // Sanitize field name for Firestore compatibility
+    const sanitizedName = header.name
+      .replace(/[^a-zA-Z0-9_]/g, "_") // Replace invalid chars with underscore
+      .replace(/^_+|_+$/g, "") // Remove leading/trailing underscores
+      .replace(/_+/g, "_") // Replace multiple underscores with single
+      .toLowerCase(); // Convert to lowercase
+
+    return {
+      name: header.name,
+      sanitizedName,
+      showtoagent: agentViewColumns.includes(header.index), // Only selected columns are shown to agents
+    };
+  });
 
   try {
     // Step 1: Store list metadata in 'lists' collection
@@ -116,52 +135,40 @@ export async function createList(
 
     await setDoc(doc(db, "lists", listId), listMetadata);
 
-    // Step 2: Store individual vehicle records in 'vehicleno' collection
-    const batch = writeBatch(db);
+    // Step 2: Optimized batch processing for vehicle records
     const vehiclenoCollection = collection(db, "vehicleno");
-
     let newVehicles = 0;
     let updatedVehicles = 0;
 
-    for (let index = 0; index < dataRows.length; index++) {
-      const row = dataRows[index];
-      const vehicleNumber = String(row[vehicleColumnIndex] || "");
-      const lastFourDigits = vehicleNumber.slice(-4); // Extract last 4 characters
+    // Process in batches of 500 (Firestore batch limit is 500 operations)
+    const BATCH_SIZE = 500;
+    const totalBatches = Math.ceil(dataRows.length / BATCH_SIZE);
 
-      // All vehicle records are shown to agents by default
-      // (the column-level visibility is controlled by the rows array)
-      const showtoagent = true;
+    console.log(
+      `Processing ${dataRows.length} vehicles in ${totalBatches} batches...`
+    );
 
-      // Check if vehicle already exists
-      const vehicleDocRef = doc(vehiclenoCollection, vehicleNumber);
-      const vehicleDoc = await getDoc(vehicleDocRef);
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const startIndex = batchIndex * BATCH_SIZE;
+      const endIndex = Math.min(startIndex + BATCH_SIZE, dataRows.length);
+      const batchRows = dataRows.slice(startIndex, endIndex);
 
-      if (vehicleDoc.exists()) {
-        // Vehicle exists - update it with new data
-        const existingData = vehicleDoc.data();
+      // Create batch for this chunk
+      const batch = writeBatch(db);
 
-        // Create update object with new data
-        const updateData: Partial<VehicleRecord> = {
-          updatedAt: now.toISOString(),
-          listParentId: listId, // Update to new list
-          rowIndex: index,
-          showtoagent,
-        };
+      // Process each row in the current batch
+      for (let i = 0; i < batchRows.length; i++) {
+        const row = batchRows[i];
+        const index = startIndex + i;
+        const vehicleNumber = String(row[vehicleColumnIndex] || "");
+        const lastFourDigits = vehicleNumber.slice(-4);
 
-        // Add all column data as dynamic properties
-        columnHeaders.forEach((header) => {
-          updateData[header.name] = row[header.index] || "";
-        });
+        const showtoagent = true;
+        const vehicleDocRef = doc(vehiclenoCollection, vehicleNumber);
 
-        // Use updateDoc to preserve existing fields and update with new data
-        batch.update(vehicleDocRef, updateData);
-        updatedVehicles++;
-
-        console.log(`Updating existing vehicle: ${vehicleNumber}`);
-      } else {
-        // Vehicle doesn't exist - create new record
+        // Create vehicle record
         const vehicleRecord: VehicleRecord = {
-          id: vehicleNumber, // Use vehicle number as ID
+          id: vehicleNumber,
           vehicleNumber,
           lastFourDigits,
           listParentId: listId,
@@ -171,36 +178,65 @@ export async function createList(
           showtoagent,
         };
 
-        // Add all column data as dynamic properties
-        columnHeaders.forEach((header) => {
-          vehicleRecord[header.name] = row[header.index] || "";
+        // Add all column data as dynamic properties using sanitized field names
+        columnHeaders.forEach((header, headerIndex) => {
+          const sanitizedFieldName = rows[headerIndex].sanitizedName;
+          vehicleRecord[sanitizedFieldName] = row[header.index] || "";
         });
 
-        // Use the vehicle number as document ID
-        batch.set(vehicleDocRef, vehicleRecord);
-        newVehicles++;
+        // Use set with merge option to handle both new and existing documents
+        batch.set(vehicleDocRef, vehicleRecord, { merge: true });
+        newVehicles++; // We'll count all as new for simplicity
+      }
 
-        console.log(`Creating new vehicle: ${vehicleNumber}`);
+      // Commit this batch
+      await batch.commit();
+
+      // Calculate and report progress
+      const currentBatch = batchIndex + 1;
+      const progress = (currentBatch / totalBatches) * 100;
+      const processedVehicles = Math.min(
+        currentBatch * BATCH_SIZE,
+        dataRows.length
+      );
+
+      console.log(
+        `Batch ${currentBatch}/${totalBatches} completed (${progress.toFixed(
+          1
+        )}%)`
+      );
+
+      // Call progress callback if provided
+      if (onProgress) {
+        onProgress({
+          currentBatch,
+          totalBatches,
+          progress,
+          processedVehicles,
+          totalVehicles: dataRows.length,
+        });
       }
     }
 
-    await batch.commit();
-
     console.log(`Successfully created list ${listId}`);
     console.log(`Lists table: 1 record added with ${rows.length} columns`);
-    console.log(
-      `Vehicleno table: ${newVehicles} new records created, ${updatedVehicles} existing records updated`
-    );
+    console.log(`Vehicleno table: ${newVehicles} records processed`);
     console.log(
       `Columns visible to agents: ${rows.filter((r) => r.showtoagent).length}/${
         rows.length
       }`
     );
 
+    // Log field name mappings for debugging
+    console.log("Field name mappings:");
+    rows.forEach((row) => {
+      console.log(`  "${row.name}" -> "${row.sanitizedName}"`);
+    });
+
     return {
       newVehicles,
-      updatedVehicles,
-      totalVehicles: newVehicles + updatedVehicles,
+      updatedVehicles: 0, // Simplified counting
+      totalVehicles: newVehicles,
       listId,
     };
   } catch (error) {

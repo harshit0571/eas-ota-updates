@@ -17,6 +17,7 @@ export interface User {
   city: string;
   role: string;
   verification_status: "pending" | "verified" | "rejected";
+  deviceId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -38,6 +39,7 @@ export async function fetchUsers(): Promise<User[]> {
         city: data.city,
         role: data.role,
         verification_status: data.verification_status,
+        deviceId: data.deviceId || "",
         createdAt: data.createdAt.toDate(),
         updatedAt: data.updatedAt.toDate(),
       });
@@ -105,6 +107,31 @@ export function useUpdateUserPassword() {
       }
 
       return response.json();
+    },
+  });
+}
+
+export function useUpdateUserDeviceId() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      userId,
+      deviceId,
+    }: {
+      userId: string;
+      deviceId: string;
+    }) => {
+      const userRef = doc(db, "users", userId);
+      await updateDoc(userRef, {
+        deviceId: deviceId,
+        updatedAt: new Date(),
+      });
+      return { userId, deviceId };
+    },
+    onSuccess: () => {
+      // Invalidate and refetch users
+      queryClient.invalidateQueries({ queryKey: ["users"] });
     },
   });
 }
